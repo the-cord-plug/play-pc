@@ -5,39 +5,56 @@ const { receiveMessage }   = getModule([ "receiveMessage" ], false)
 
 const fs = require("fs")
 const ytdl = require("ytdl-core")
+const dir = __dirname
+// I saw in pc-commands they some how required a fucking folder don't know how to do that tbh
+// const commands = fs.readdirSync(`${dir}\\commands`).map(file => {
+//     const command = require(`${dir}\\commands\\${file}`)
+//     command.module = this
+//     return command
+// })
 // const ffmpeg = require("fluent-ffmpeg")
 // const { createFFmpeg, fetchFile } = require("@ffmpeg/ffmpeg")
 // const ffmpeg = createFFmpeg({ log: true })
 const exec = require("util").promisify(require("child_process").exec)
 let downloading = false
 
-module.exports = class ArrowDownForLastMesage extends Plugin {
+module.exports = class YoutubeMusic extends Plugin {
     constructor() {
         super()
         this.playing = undefined
         this.volume = 0.50
         this.name = ""
+        this.getAudio = this.getAudio.bind(this)
+        this.downloadVideo = this.downloadVideo.bind(this)
+
     }
     
-    async sendBotMessage(content) {
-        const received = createBotMessage(channels.getChannelId(), content)
+    async sendBotMessage(content, title, footer, author, url, footerURL ) {
+        const received = createBotMessage(channels.getChannelId())
         received.author.username = "Youtube Music"
         // received.author.avatar = "https://bloximages.newyork1.vip.townnews.com/jewishaz.com/content/tncms/assets/v3/editorial/9/e0/9e0f4054-50aa-11e9-8169-030b16b2a5e4/5c9ba015c2cc7.image.jpg"
-        
+        console.log(received)
+        received.embeds.push({
+            color: 0x0099ff,
+            title: title,
+            url: url,
+            author: {
+                name: author,
+            },
+            description: content,
+            timestamp: new Date(),
+            footer: {
+                text: footer,
+                icon_url: footerURL,
+            },
+        })
         return receiveMessage(received.channel_id, received)
     }
     
-    async getAudio(pattern, cb, _this) { // im just sending it this cause idk fuck me right im retarded murder me please im a sin just living im a fucking mistake right alright got it 
-        const { getAudioList } = _this 
-
+    async getAudio(pattern, cb) { // im just sending it this cause idk fuck me right im retarded murder me please im a sin just living im a fucking mistake right alright got it 
+        const { getAudioList } = this
+        
         const list = await getAudioList()
-
-        // list.every(name => {
-        //     if (name.toLowerCase().match(pattern)) {
-        //         cb(name)
-        //         return true
-        //     }
-        // })
 
         for (const name of list) {
             if (name.toLowerCase().match(pattern.toLowerCase())) {
@@ -50,7 +67,6 @@ module.exports = class ArrowDownForLastMesage extends Plugin {
     }
     
     async downloadVideo(url, cb) { // i fucking hate ffmpeg fuck stream to mp3 im just installing mp4 then converting to mp3, i know that hurts you but i"ve done it anyway so kill me murder me then please
-        
         if (downloading) return
         const rawFiles = await fs.promises.readdir(`${__dirname}\\content\\`)
         const files = rawFiles.map(x => x.split(".").slice(0, -1).join(".")) // removes extension names like mp3/mp4/avi/js
@@ -62,9 +78,10 @@ module.exports = class ArrowDownForLastMesage extends Plugin {
         stream.on("info", (info) => {
             const { videoDetails } = info
             const { title } = info.videoDetails
-            
+            console.log(videoDetails)
             const mp4Path = `${__dirname}\\downloading\\${title}.mp4`
             
+            console.log(videoDetails)
 
             if (files.indexOf(title) != -1) {
                 cb(`Installation of "${title}" was terminated because there is a audio with a matching name already installed.`)
@@ -86,7 +103,7 @@ module.exports = class ArrowDownForLastMesage extends Plugin {
                         cwd: __dirname
                     })
 
-                    const path = `${__dirname}\\downloading\\${title}`
+                    // const path = `${__dirname}\\downloading\\${title}`
 
                     // I tried to do this shit but like it errors getting memory so for now im just leaving the exe I can't do shit atm 
                    
@@ -96,11 +113,11 @@ module.exports = class ArrowDownForLastMesage extends Plugin {
                     // await ffmpeg.run("-i", `${path}.mp4`, `${path}.mp3`)
                     // await fs.promises.writeFile(`${path}.mp3`, ffmpeg.FS("readFile", `${path}.mp3`))
 
-                    
                     await fs.promises.unlink(mp4Path)
                     await fs.promises.rename(`${__dirname}\\downloading\\${title}.mp3`, `${__dirname}\\content\\${title}.mp3`)
                     cb(`Installation of "${title}" should be completed and can be viewed in ytlist.`)
                     downloading = false
+
                 })
                 
                 return videoDetails
@@ -109,7 +126,7 @@ module.exports = class ArrowDownForLastMesage extends Plugin {
     }
     
     async getAudioList() {
-        const rawList = await fs.promises.readdir(`${__dirname}/content/`)
+        const rawList = await fs.promises.readdir(`${dir}/content/`)
         return rawList.map(x => x.split(".").slice(0, -1).join("."))
     }
     
@@ -125,7 +142,7 @@ module.exports = class ArrowDownForLastMesage extends Plugin {
         for await (const file of files) {
             await fs.promises.unlink(`${dlPath}\\${file}`)
         }
-
+        // Object.values(commands).forEach(c => powercord.api.commands.registerCommand(c))
 
 
         const { sendBotMessage, downloadVideo, getAudioList, getAudio, getPlaying } = this
@@ -144,21 +161,26 @@ module.exports = class ArrowDownForLastMesage extends Plugin {
                         playing.pause()
                         playing.currentTime = 0
                     } else {
-                        playing.play()
-                        sendBotMessage(`Playing ${this.name} (Volume: ${Math.floor(this.volume*100)}%)`)
+                        const time = Math.floor((playing.currentTime/playing.duration) * 50) 
+
+                        if (playing.paused) {
+                            playing.play()
+                            sendBotMessage(`🎵 [ ${"-".repeat(time)}⏺${"-".repeat(50-time)} ]`, this.name, `${this.volume*100}%`)
+                        }    
+                        return
+                    } 
+                } else {
+                    if (!name) {
+                        sendBotMessage("Please use the name of a song, to view your installed audio use the command ytlist. (ex: .ytplay drip drop)")
                         return
                     }
                 }
-
-                if (!name) {
-                    sendBotMessage("Please use the name of a song, to view your installed audio use the command ytlist. (ex: .ytplay drip drop)")
-                    return
-                }
+                
 
 
                 await getAudio(name, (content) => {
                     if (!content) {
-                        sendBotMessage(`Couldn't find the audio matching the pattern of "${pattern}", retype the command or review downloaded audio with the ytlist command.`)
+                        sendBotMessage(`Couldn't find the audio matching the pattern of "${name}", retype the command or review downloaded audio with the ytlist command.`)
                         return
                     }
 
@@ -179,10 +201,11 @@ module.exports = class ArrowDownForLastMesage extends Plugin {
             executor: async (args) => {
                 if (args.length != 0) return
                 const playing = getPlaying(this)
+                const time = Math.floor((playing.currentTime/playing.duration) * 50) 
 
-                if (playing) {
+                if ((playing) && (!playing.paused)) {
                     playing.pause()
-                    sendBotMessage(`Paused ${this.name} (Volume: ${this.volume*100}%)`)
+                    sendBotMessage(`⏸ [ ${"-".repeat(time)}⏺${"-".repeat(50-time)} ]`, this.name, `${this.volume*100}%`)
                 }               
                 
             }
@@ -230,7 +253,7 @@ module.exports = class ArrowDownForLastMesage extends Plugin {
             executor: async (args) => { // this is kinda retarded making it mostly just a function call and string manipulation im just retarded idk why im alive tbh 
                 const list = await getAudioList()
                 
-                sendBotMessage(list.map((x, i) => `${i + 1}. ${x}`).join("\n"))
+                sendBotMessage(list.join("\n"), "Downloaded Audio:")
             }
         })
 
@@ -262,17 +285,35 @@ module.exports = class ArrowDownForLastMesage extends Plugin {
 
         powercord.api.commands.registerCommand({
             command: "ytdelete",
-            description: "rename downloaded youtube audio",
+            description: "delete downloaded youtube audio",
             usage: "{c}",
             executor: async (args) => { // this is kinda retarded making it mostly just a function call and string manipulation im just retarded idk why im alive tbh 
-                const list = await getAudioList()
-                
-                sendBotMessage(list.map((x, i) => `${i + 1}. ${x}`).join("\n"))
+                if (args.length >= 2) {
+                    sendBotMessage("This command was typed improperly use this example: (.ytrename unreleased Juice WRLD - drip drop).")
+                    return
+                }
+                const pattern = args.join(" ")
+
+                await getAudio(pattern, async (content) => {
+                    if (!content) {
+                        sendBotMessage(`Couldn't find the audio matching the pattern of "${pattern}", retype the command or review downloaded audio with the ytlist command.`)
+                        return
+                    }
+
+                    if (content == this.name) {
+                        this.name = ""
+                    }
+
+                    await fs.promises.unlink(`${__dirname}\\content\\${content}.mp3`)
+                    sendBotMessage(`Removed the audio called "${content}" that was downloaded from Youtube.`)
+
+                }, this)
             }
         })
     }
     
     pluginWillUnload() {
+        // Object.values(commands).forEach(command => powercord.api.commands.unregisterCommand(command.command))
         powercord.api.commands.unregisterCommand("ytplay")
         powercord.api.commands.unregisterCommand("ytdownload")
         powercord.api.commands.unregisterCommand("ytlist")
