@@ -3,4 +3,4 @@ You can play downloaded youtube audio through discord, also if you think it's ma
 
 EXAMPLE VIDEO:
 
-[![example](https://img.youtube.com/vi/GTs63KU_Jro/0.jpg)](http://www.youtube.com/watch?v=GTs63KU_Jro)
+[![example](https://media.discordapp.net/attachments/822638850940731452/862722570105389076/unknown.png)](http://www.youtube.com/watch?v=GTs63KU_Jro)
