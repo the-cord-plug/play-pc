@@ -14,7 +14,9 @@ const dir = __dirname
 // })
 // const ffmpeg = require("fluent-ffmpeg")
 // const { createFFmpeg, fetchFile } = require("@ffmpeg/ffmpeg")
-// const ffmpeg = createFFmpeg({ log: true })
+// const ffmpeg = createFFmpeg({ corePath: `${dir}\\ffmpeg-core.js` })
+
+const ffmpegPlatform = process.platform != "win32" ? "mac" : "windows.exe"
 const exec = require("util").promisify(require("child_process").exec)
 let downloading = false
 
@@ -87,7 +89,7 @@ module.exports = class YoutubeMusic extends Plugin {
                 cb(`Installation of "${title}" was terminated because there is a audio with a matching name already installed.`)
                 downloading = false
             } else {
-                cb(`Installation of "${title}" has started and will take a specific amount of time depending on the size of the video.`)
+                cb(`Installation of "${title}" has started and will take a specific amount of time depending on the size of the video. (closing/refreshing discord will cancel)`)
                 stream.pipe(fs.createWriteStream(mp4Path))
                 
                 // this is tied to the memory shit in stream.on that errors
@@ -99,17 +101,16 @@ module.exports = class YoutubeMusic extends Plugin {
                 // })
                 
                 stream.on("end", async () => {
-                    await exec(`ffmpeg -i "downloading/${title}.mp4" "downloading/${title}.mp3"`, {
+                    await exec(`${ffmpegPlatform} -i "downloading/${title}.mp4" "downloading/${title}.mp3"`, {
                         cwd: __dirname
                     })
 
-                    // const path = `${__dirname}\\downloading\\${title}`
+                    const path = `${__dirname}\\downloading\\${title}`
 
                     // I tried to do this shit but like it errors getting memory so for now im just leaving the exe I can't do shit atm 
-                   
-                    // const buffer = new Uint8Array(Buffer.concat(data)) //  0, sourceBuffer.byteLength)
+                    // const buffers = Buffer.concat(data)
                     // await ffmpeg.load()
-                    // ffmpeg.FS("writeFile", `${path}.mp4`, buffer)
+                    // ffmpeg.FS("writeFile", `${path}.mp4`, new Uint8Array(buffers, 0, buffers.byteLength))
                     // await ffmpeg.run("-i", `${path}.mp4`, `${path}.mp3`)
                     // await fs.promises.writeFile(`${path}.mp3`, ffmpeg.FS("readFile", `${path}.mp3`))
 
@@ -117,7 +118,6 @@ module.exports = class YoutubeMusic extends Plugin {
                     await fs.promises.rename(`${__dirname}\\downloading\\${title}.mp3`, `${__dirname}\\content\\${title}.mp3`)
                     cb(`Installation of "${title}" should be completed and can be viewed in ytlist.`)
                     downloading = false
-
                 })
                 
                 return videoDetails
@@ -144,7 +144,15 @@ module.exports = class YoutubeMusic extends Plugin {
         }
         // Object.values(commands).forEach(c => powercord.api.commands.registerCommand(c))
 
+        const file = `${__dirname}\\${ process.platform == "win32" ? "mac" : "windows.exe" }`
 
+        fs.stat(file, (_, stats) => { // removes the version that won't be used
+            if ((stats) && (stats.isFile())) {
+                fs.promises.unlink(file)
+            }
+        })
+  
+        
         const { sendBotMessage, downloadVideo, getAudioList, getAudio, getPlaying } = this
         
         
@@ -224,7 +232,10 @@ module.exports = class YoutubeMusic extends Plugin {
                     this.volume = volume
                     if (playing) {
                         playing.volume = volume
+                        let time = Math.floor((playing.currentTime/playing.duration) * 50) 
+                        sendBotMessage(`${playing?playing.paused?"⏸ ":"🎵 ":""}[ ${"-".repeat(time)}⏺${"-".repeat(50-time)} ]`, this.name, `${this.volume*100}%`)  
                     }
+
                 }               
                 
             }
@@ -242,7 +253,7 @@ module.exports = class YoutubeMusic extends Plugin {
                     return
                 }
                 
-                const vd = await downloadVideo(url, sendBotMessage)
+                await downloadVideo(url, sendBotMessage)
             }
         })
         
