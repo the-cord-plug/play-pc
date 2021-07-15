@@ -1,7 +1,7 @@
 {
   "name": "Youtube Music",
   "version": "0.0.1",
-  "description": "Download music from discord and play it locally at anytime.",
+  "description": "Download music from discord and play it locally at anytime without a exe installed.",
   "author": "1XC",
   "license": "MIT"
 }

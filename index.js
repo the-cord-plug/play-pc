@@ -1,24 +1,13 @@
 const { Plugin } = require("powercord/entities")
+const { get, post } = require("powercord/http")
 const { getModule , channels } = require("powercord/webpack")
 const { createBotMessage } = getModule([ "createBotMessage" ], false)
 const { receiveMessage }   = getModule([ "receiveMessage" ], false)
 
 const fs = require("fs")
-const ytdl = require("ytdl-core")
 const dir = __dirname
-// I saw in pc-commands they some how required a fucking folder don't know how to do that tbh
-// const commands = fs.readdirSync(`${dir}\\commands`).map(file => {
-//     const command = require(`${dir}\\commands\\${file}`)
-//     command.module = this
-//     return command
-// })
-// const ffmpeg = require("fluent-ffmpeg")
-// const { createFFmpeg, fetchFile } = require("@ffmpeg/ffmpeg")
-// const ffmpeg = createFFmpeg({ corePath: `${dir}\\ffmpeg-core.js` })
-
-const ffmpegPlatform = process.platform != "win32" ? "mac" : "windows.exe"
-const exec = require("util").promisify(require("child_process").exec)
 let downloading = false
+// theres no exe
 
 module.exports = class YoutubeMusic extends Plugin {
     constructor() {
@@ -34,8 +23,7 @@ module.exports = class YoutubeMusic extends Plugin {
     async sendBotMessage(content, title, footer, author, url, footerURL ) {
         const received = createBotMessage(channels.getChannelId())
         received.author.username = "Youtube Music"
-        // received.author.avatar = "https://bloximages.newyork1.vip.townnews.com/jewishaz.com/content/tncms/assets/v3/editorial/9/e0/9e0f4054-50aa-11e9-8169-030b16b2a5e4/5c9ba015c2cc7.image.jpg"
-        console.log(received)
+
         received.embeds.push({
             color: 0x0099ff,
             title: title,
@@ -68,63 +56,37 @@ module.exports = class YoutubeMusic extends Plugin {
         cb(false)
     }
     
-    async downloadVideo(url, cb) { // i fucking hate ffmpeg fuck stream to mp3 im just installing mp4 then converting to mp3, i know that hurts you but i"ve done it anyway so kill me murder me then please
-        if (downloading) return
+    async downloadVideo(url, cb) { // i don't know if this will last the api could be changed of course if this happens it won't work 
         const rawFiles = await fs.promises.readdir(`${__dirname}\\content\\`)
         const files = rawFiles.map(x => x.split(".").slice(0, -1).join(".")) // removes extension names like mp3/mp4/avi/js
         
         downloading = true
-        const stream = ytdl(url)
+        const { body } = await post("https://yt1s.com/api/ajaxSearch/index")
+            .set("content-type", "application/x-www-form-urlencoded; charset=UTF-8")
+            .send(`q=${encodeURIComponent(url)}&vt=home`)
         
+        const { links, vid, title } = body
+        const { k } = (Object.values(links.mp3) || []).shift()        
+
+        if (files.indexOf(title) != -1) {
+            cb(`Installation of "${title}" was terminated because there is a audio with a matching name already installed.`)
+            downloading = false
+            return
+        }
+
+        const response = await post("https://yt1s.com/api/ajaxConvert/convert")
+            .set("content-type", "application/x-www-form-urlencoded; charset=UTF-8")
+            .send(`vid=${encodeURIComponent(vid)}&k=${encodeURIComponent(k)}`)
         
-        stream.on("info", (info) => {
-            const { videoDetails } = info
-            const { title } = info.videoDetails
-            console.log(videoDetails)
-            const mp4Path = `${__dirname}\\downloading\\${title}.mp4`
-            
-            console.log(videoDetails)
+        const { dlink } = response.body
+        const buffer = await get(dlink)
+        
+       
+        await fs.promises.writeFile(`${dir}\\content\\${title}.mp3`, buffer.body)
+        cb(`Installation of "${title}" should be completed and can be viewed in ytlist.`)
+        downloading = false
+    } 
 
-            if (files.indexOf(title) != -1) {
-                cb(`Installation of "${title}" was terminated because there is a audio with a matching name already installed.`)
-                downloading = false
-            } else {
-                cb(`Installation of "${title}" has started and will take a specific amount of time depending on the size of the video. (closing/refreshing discord will cancel)`)
-                stream.pipe(fs.createWriteStream(mp4Path))
-                
-                // this is tied to the memory shit in stream.on that errors
-
-                // const data = []
-
-                // stream.on("data", (chunk) => {
-                //     data.push(chunk)
-                // })
-                
-                stream.on("end", async () => {
-                    await exec(`${ffmpegPlatform} -i "downloading/${title}.mp4" "downloading/${title}.mp3"`, {
-                        cwd: __dirname
-                    })
-
-                    const path = `${__dirname}\\downloading\\${title}`
-
-                    // I tried to do this shit but like it errors getting memory so for now im just leaving the exe I can't do shit atm 
-                    // const buffers = Buffer.concat(data)
-                    // await ffmpeg.load()
-                    // ffmpeg.FS("writeFile", `${path}.mp4`, new Uint8Array(buffers, 0, buffers.byteLength))
-                    // await ffmpeg.run("-i", `${path}.mp4`, `${path}.mp3`)
-                    // await fs.promises.writeFile(`${path}.mp3`, ffmpeg.FS("readFile", `${path}.mp3`))
-
-                    await fs.promises.unlink(mp4Path)
-                    await fs.promises.rename(`${__dirname}\\downloading\\${title}.mp3`, `${__dirname}\\content\\${title}.mp3`)
-                    cb(`Installation of "${title}" should be completed and can be viewed in ytlist.`)
-                    downloading = false
-                })
-                
-                return videoDetails
-            }
-        })
-    }
-    
     async getAudioList() {
         const rawList = await fs.promises.readdir(`${dir}/content/`)
         return rawList.map(x => x.split(".").slice(0, -1).join("."))
@@ -135,22 +97,22 @@ module.exports = class YoutubeMusic extends Plugin {
     }
 
     async startPlugin() {
-        const dlPath = `${__dirname}\\downloading\\` // clears downloads for people that could have refreshed/closed discord while there was shit installing still 
-        const files = await fs.promises.readdir(dlPath)
+        // const dlPath = `${__dirname}\\downloading\\` // clears downloads for people that could have refreshed/closed discord while there was shit installing still 
+        // const files = await fs.promises.readdir(dlPath)
         
-        console.log(files)
-        for await (const file of files) {
-            await fs.promises.unlink(`${dlPath}\\${file}`)
-        }
-        // Object.values(commands).forEach(c => powercord.api.commands.registerCommand(c))
+        // console.log(files)
+        // for await (const file of files) {
+        //     await fs.promises.unlink(`${dlPath}\\${file}`)
+        // }
+        // // Object.values(commands).forEach(c => powercord.api.commands.registerCommand(c))
 
-        const file = `${__dirname}\\${ process.platform == "win32" ? "mac" : "windows.exe" }`
+        // const file = `${__dirname}\\${ process.platform == "win32" ? "mac" : "windows.exe" }`
 
-        fs.stat(file, (_, stats) => { // removes the version that won't be used
-            if ((stats) && (stats.isFile())) {
-                fs.promises.unlink(file)
-            }
-        })
+        // fs.stat(file, (_, stats) => { // removes the version that won't be used
+        //     if ((stats) && (stats.isFile())) {
+        //         fs.promises.unlink(file)
+        //     }
+        // })
   
         
         const { sendBotMessage, downloadVideo, getAudioList, getAudio, getPlaying } = this
@@ -252,6 +214,7 @@ module.exports = class YoutubeMusic extends Plugin {
                     sendBotMessage("There is a video that is still downloading currently.")
                     return
                 }
+
                 
                 await downloadVideo(url, sendBotMessage)
             }
